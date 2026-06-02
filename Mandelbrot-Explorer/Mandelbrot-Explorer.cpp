@@ -61,6 +61,19 @@ int main()
         ImGui::NewFrame();
 
         {
+            if (ImGui::BeginMainMenuBar()) {
+
+                if (ImGui::BeginMenu("File")) {
+
+                    if (ImGui::MenuItem("Exit")) {
+                        glfwSetWindowShouldClose(window, GLFW_TRUE);
+                    }
+
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMainMenuBar();
+            }
+
             ImGui::Begin("Settings");
 
             ImGui::Text("Mandelbrot Explorer");
