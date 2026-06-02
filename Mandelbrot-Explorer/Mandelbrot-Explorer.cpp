@@ -5,6 +5,23 @@
 
 #include <glfw3.h>
 
+int mandelbrot(double cr, double cj, int max_iterations) {
+    double zr = 0.0; // Re part
+    double zj = 0.0; // Im part
+    int count = 0;
+
+    // |z| < 2   --->   zr^2 + zj^2 < 4
+    while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
+        // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+        double temp = zr * zr - zj * zj + cr;
+        zj = 2.0 * zr * zj + cj;
+        zr = temp;
+        count++;
+    }
+
+    return count;
+}
+
 int main()
 {
 
