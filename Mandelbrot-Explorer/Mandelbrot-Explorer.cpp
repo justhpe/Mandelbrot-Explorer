@@ -42,6 +42,8 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
+    int counter = 0;
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         // Event handling
@@ -57,6 +59,13 @@ int main()
 
             ImGui::Text("Mandelbrot Explorer");
 
+            if (ImGui::Button("Click me")) {
+                counter++;
+            }
+            ImGui::SameLine();
+            ImGui::Text("Clicks = %d", counter);
+
+            ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::End();
         }
         
