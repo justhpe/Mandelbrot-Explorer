@@ -11,6 +11,7 @@ int main()
     // Config
     short width = 1280;
     short height = 720;
+    float scale = 1;
 
     // GLFW Init
     if (!glfwInit()) {
@@ -37,6 +38,11 @@ int main()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+    // Interface scaling
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(scale);
+    io.FontGlobalScale = scale;
 
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
