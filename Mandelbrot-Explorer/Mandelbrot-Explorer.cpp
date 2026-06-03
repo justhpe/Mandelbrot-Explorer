@@ -30,6 +30,8 @@ int main()
     short height = 720;
     float scale = 1;
 
+    int display_w = width;
+    int display_h = height;
     // GLFW Init
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -102,6 +104,7 @@ int main()
             ImGui::Text("Clicks = %d", counter);
 
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::Text("Resolution: %d x %d px", display_w, display_h);
             ImGui::End();
         }
         
@@ -109,6 +112,8 @@ int main()
         ImGui::Render();
 
         // Screen cleaning (OpenGL)
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Drawing the interface on the screen
