@@ -32,10 +32,6 @@ int main()
     short height = 720;
     float scale = 1;
 
-    // Window res for glfw, mandelbrot set is currently in static res
-    int display_w = width;
-    int display_h = height;
-
     double minR = -2.0;
     double maxR = 1.0;
     double minI = -1.2;
@@ -124,7 +120,7 @@ int main()
             ImGui::Text("Clicks = %d", counter);
 
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::Text("Resolution: %d x %d px", display_w, display_h);
+            ImGui::Text("Resolution: %d x %d px", width, height);
             ImGui::End();
         }
         
@@ -158,9 +154,18 @@ int main()
 
 
         // Screen cleaning (OpenGL)
+        int display_w;
+        int display_h;
         glfwGetFramebufferSize(window, &display_w, &display_h);
         glViewport(0, 0, display_w, display_h);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        // Dynamic resolution change
+        if (display_h != height || display_w != width) {
+            height = display_h;
+            width = display_w;
+            buffer.resize(width * height);
+        }
 
         // Enabling 2D texturing
         glEnable(GL_TEXTURE_2D);
