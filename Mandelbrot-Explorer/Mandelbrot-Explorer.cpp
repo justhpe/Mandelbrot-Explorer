@@ -59,6 +59,7 @@ int main()
         return -1;
     }
     glfwMakeContextCurrent(window);
+    glfwSetWindowAspectRatio(window, 16, 9); // keep aspect ratio
     glfwSwapInterval(1); // V-Sync
 
     // Dear ImGui Init
