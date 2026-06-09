@@ -180,6 +180,9 @@ int main()
             height = display_h;
             width = display_w;
             buffer.resize(width * height);
+
+            // Render after resolution change
+            isChanged = true;
         }
 
         // Enabling 2D texturing
