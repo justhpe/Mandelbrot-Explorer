@@ -31,6 +31,7 @@ int main()
     short width = 1280;
     short height = 720;
     float scale = 1;
+    bool isChanged = true;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -101,6 +102,12 @@ int main()
 
                 if (ImGui::BeginMenu("File")) {
 
+                    if (ImGui::MenuItem("Render view")) {
+                        isChanged = true;
+                    }
+
+                    ImGui::Separator();
+
                     if (ImGui::MenuItem("Exit")) {
                         glfwSetWindowShouldClose(window, GLFW_TRUE);
                     }
@@ -113,6 +120,10 @@ int main()
             ImGui::Begin("Settings");
 
             ImGui::Text("Mandelbrot Explorer");
+
+            if (ImGui::Button("Render view")) {
+                isChanged = true;
+            }
 
             if (ImGui::Button("Click me")) {
                 counter++;
@@ -128,27 +139,30 @@ int main()
         // Rendering ImGui
         ImGui::Render();
 
-                
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                // Mapowanie pixela na plaszczyzne zespolona
-                double cr = minR + (double)x / width * (maxR - minR);
-                double ci = minI + (double)y / height * (maxI - minI);
+        if (isChanged) {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    // Mapowanie pixela na plaszczyzne zespolona
+                    double cr = minR + (double)x / width * (maxR - minR);
+                    double ci = minI + (double)y / height * (maxI - minI);
 
-                int iterations = mandelbrot(cr, ci, max_iterations);
+                    int iterations = mandelbrot(cr, ci, max_iterations);
 
-                // Kolorowanie i zapis do bufora (ARGB)
-                if (iterations == max_iterations) {
-                    buffer[y * width + x] = 0xFF000000; // Black (alfa, B, G, R)
-                }
-                else {
-                    uint8_t r = iterations * 2;
-                    uint8_t g = iterations * 5;
-                    uint8_t b = iterations;
-                    buffer[y * width + x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+                    // Kolorowanie i zapis do bufora (ARGB)
+                    if (iterations == max_iterations) {
+                        buffer[y * width + x] = 0xFF000000; // Black (alfa, B, G, R)
+                    }
+                    else {
+                        uint8_t r = iterations * 2;
+                        uint8_t g = iterations * 5;
+                        uint8_t b = iterations;
+                        buffer[y * width + x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
+                    }
                 }
             }
         }
+
+        isChanged = false;
 
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer.data());
