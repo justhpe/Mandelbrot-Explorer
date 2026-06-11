@@ -115,13 +115,13 @@ const char* fragmentShaderSourceFP32 = R"(
 
 
 // Shader compilation
-GLuint compileShaders() {
+GLuint compileShaders(const char* fragmentShaderSource) {
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
     glCompileShader(vertexShader);
 
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSourceFP32, NULL);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
 
     GLuint shaderProgram = glCreateProgram();
@@ -162,6 +162,7 @@ int main()
     int width = 1280;
     int height = 720;
     float scale = 1;
+    bool useFP64 = false;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -217,7 +218,9 @@ int main()
     int counter = 0;
 
     // Compiling the shader program
-    GLuint shaderProgram = compileShaders();
+    GLuint shaderProgramFP32 = compileShaders(fragmentShaderSourceFP32);
+    GLuint shaderProgramFP64 = compileShaders(fragmentShaderSourceFP64);
+    GLuint shaderProgram = shaderProgramFP32; // default shader program
 
     // Two triangles forming a rectangle
     float vertices[] = {
@@ -274,6 +277,8 @@ int main()
             }
             ImGui::SameLine();
             ImGui::Text("Clicks = %d", counter);
+
+            ImGui::Checkbox("Use FP64?", &useFP64);
             
             ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
@@ -289,6 +294,8 @@ int main()
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        GLuint shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
 
         // GPU program starts here
         glUseProgram(shaderProgram);
@@ -315,6 +322,8 @@ int main()
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteProgram(shaderProgram);
+    glDeleteProgram(shaderProgramFP32);
+    glDeleteProgram(shaderProgramFP64);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
