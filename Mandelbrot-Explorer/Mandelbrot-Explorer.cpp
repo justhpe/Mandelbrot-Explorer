@@ -18,8 +18,9 @@ const char* vertexShaderSource = R"(
 )";
 
 
-// Fragment Shader Code
-const char* fragmentShaderSource = R"(
+// Fragment Shader Code (FP64)
+const char* fragmentShaderSourceFP64 = R"(
+    // Fragment Shader Code (FP64)
     #version 460 core
     out vec4 FragColor;
 
@@ -62,6 +63,55 @@ const char* fragmentShaderSource = R"(
     }
 )";
 
+// Fragment Shader Code (FP32)
+const char* fragmentShaderSourceFP32 = R"(
+    // Fragment Shader Code (FP32)
+    #version 460 core
+    out vec4 FragColor;
+
+    uniform vec2 u_resolution;
+    uniform double u_minR;
+    uniform double u_maxR;
+    uniform double u_minI;
+    uniform double u_maxI;
+    uniform int u_max_iterations;
+
+    void main() {
+        // Mapping pixel pos to the complex plane
+        double cr_d = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
+        double cj_d = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
+
+        // FP32 optimization
+        float cr = float(cr_d);
+        float cj = float(cj_d);
+        int max_iterations = u_max_iterations;
+
+
+        float zr = 0.0; // Re part
+        float zj = 0.0; // Im part
+        int count = 0;
+
+        // |z| < 2   --->   zr^2 + zj^2 < 4
+        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
+            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+            float temp = zr * zr - zj * zj + cr;
+            zj = 2.0 * zr * zj + cj;
+            zr = temp;
+            count++;
+        }
+
+
+        if (count == max_iterations) {
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+        } else {
+            float r = float(count * 2) / 255.0;
+            float g = float(count * 5) / 255.0;
+            float b = float(count) / 255.0;
+            FragColor = vec4(r, g, b, 1.0);
+        }
+    }
+)";
+
 
 
 // Shader compilation
@@ -71,7 +121,7 @@ GLuint compileShaders() {
     glCompileShader(vertexShader);
 
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSourceFP32, NULL);
     glCompileShader(fragmentShader);
 
     GLuint shaderProgram = glCreateProgram();
