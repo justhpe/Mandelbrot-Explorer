@@ -224,6 +224,8 @@ int main()
             }
             ImGui::SameLine();
             ImGui::Text("Clicks = %d", counter);
+            
+            ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::Text("Resolution: %d x %d px", width, height);
