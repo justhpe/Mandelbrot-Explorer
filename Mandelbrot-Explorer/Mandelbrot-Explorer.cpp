@@ -1,3 +1,4 @@
+#include <glad.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -7,6 +8,86 @@
 
 #include <glfw3.h>
 
+// Vertex Shader Code
+const char* vertexShaderSource = R"(
+    #version 460 core
+    layout (location = 0) in vec2 aPos;
+    void main() {
+        gl_Position = vec4(aPos, 0.0, 1.0);
+    }
+)";
+
+
+// Fragment Shader Code
+const char* fragmentShaderSource = R"(
+    #version 460 core
+    out vec4 FragColor;
+
+    uniform vec2 u_resolution;
+    uniform double u_minR;
+    uniform double u_maxR;
+    uniform double u_minI;
+    uniform double u_maxI;
+    uniform int u_max_iterations;
+
+    void main() {
+        // Mapping pixel pos to the complex plane
+        double cr = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
+        double cj = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
+        int max_iterations = u_max_iterations;
+
+
+        double zr = 0.0; // Re part
+        double zj = 0.0; // Im part
+        int count = 0;
+
+        // |z| < 2   --->   zr^2 + zj^2 < 4
+        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
+            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+            double temp = zr * zr - zj * zj + cr;
+            zj = 2.0 * zr * zj + cj;
+            zr = temp;
+            count++;
+        }
+
+
+        if (count == max_iterations) {
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+        } else {
+            float r = float(count * 2) / 255.0;
+            float g = float(count * 5) / 255.0;
+            float b = float(count) / 255.0;
+            FragColor = vec4(r, g, b, 1.0);
+        }
+    }
+)";
+
+
+
+// Shader compilation
+GLuint compileShaders() {
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return shaderProgram;
+}
+
+
+// Unused, as all compute are performed on GPU
+// It can be safely removed
 int mandelbrot(double cr, double cj, int max_iterations) {
     double zr = 0.0; // Re part
     double zj = 0.0; // Im part
@@ -28,10 +109,9 @@ int main()
 {
 
     // Config
-    short width = 1280;
-    short height = 720;
+    int width = 1280;
+    int height = 720;
     float scale = 1;
-    bool isChanged = true;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -39,7 +119,6 @@ int main()
     double maxI = 1.2;
 
     int max_iterations = 100;
-    std::vector<uint32_t> buffer(width * height);
 
     // GLFW Init
     if (!glfwInit()) {
@@ -47,10 +126,10 @@ int main()
         return -1;
     }
 
-    // OpenGL 3.3 Core Profile
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+    // OpenGL 4.6 Core Profile
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Creating a system window
     GLFWwindow* window = glfwCreateWindow(width, height, "Mandelbrot Explorer", NULL, NULL);
@@ -62,6 +141,14 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSetWindowAspectRatio(window, 16, 9); // keep aspect ratio
     glfwSwapInterval(1); // V-Sync
+
+    // GLAD Init
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize GLAD" << std::endl;
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return -1;
+    }
 
     // Dear ImGui Init
     IMGUI_CHECKVERSION();
@@ -77,15 +164,30 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    // Empty OpenGL Texture
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
     int counter = 0;
+
+    // Compiling the shader program
+    GLuint shaderProgram = compileShaders();
+
+    // Two triangles forming a rectangle
+    float vertices[] = {
+        -1.0f, -1.0f,
+         1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f, -1.0f,
+         1.0f,  1.0f,
+        -1.0f,  1.0f
+    };
+
+    GLuint VAO, VBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+
+    glBindVertexArray(VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -102,10 +204,6 @@ int main()
 
                 if (ImGui::BeginMenu("File")) {
 
-                    if (ImGui::MenuItem("Render view")) {
-                        isChanged = true;
-                    }
-
                     ImGui::Separator();
 
                     if (ImGui::MenuItem("Exit")) {
@@ -121,10 +219,6 @@ int main()
 
             ImGui::Text("Mandelbrot Explorer");
 
-            if (ImGui::Button("Render view")) {
-                isChanged = true;
-            }
-
             if (ImGui::Button("Click me")) {
                 counter++;
             }
@@ -139,65 +233,25 @@ int main()
         // Rendering ImGui
         ImGui::Render();
 
-        if (isChanged) {
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    // Mapowanie pixela na plaszczyzne zespolona
-                    double cr = minR + (double)x / width * (maxR - minR);
-                    double ci = minI + (double)y / height * (maxI - minI);
 
-                    int iterations = mandelbrot(cr, ci, max_iterations);
-
-                    // Kolorowanie i zapis do bufora (ARGB)
-                    if (iterations == max_iterations) {
-                        buffer[y * width + x] = 0xFF000000; // Black (alfa, B, G, R)
-                    }
-                    else {
-                        uint8_t r = iterations * 2;
-                        uint8_t g = iterations * 5;
-                        uint8_t b = iterations;
-                        buffer[y * width + x] = (0xFF << 24) | (b << 16) | (g << 8) | r;
-                    }
-                }
-            }
-        }
-
-        isChanged = false;
-
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buffer.data());
-
-
-        // Screen cleaning (OpenGL)
-        int display_w;
-        int display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
+        glfwGetFramebufferSize(window, &width, &height);
+        glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Dynamic resolution change
-        if (display_h != height || display_w != width) {
-            height = display_h;
-            width = display_w;
-            buffer.resize(width * height);
+        // GPU program starts here
+        glUseProgram(shaderProgram);
 
-            // Render after resolution change
-            isChanged = true;
-        }
+        // Sending variables to Shader code
+        glUniform2f(glGetUniformLocation(shaderProgram, "u_resolution"), (float)width, (float)height);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_max_iterations"), max_iterations);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_minR"), minR);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_maxR"), maxR);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
 
-        // Enabling 2D texturing
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, textureID);
-
-        // Rectangle over the entire window in OpenGL coordinates
-        glBegin(GL_QUADS);
-            glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-            glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
-            glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
-            glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
-        glEnd();
-
-        glDisable(GL_TEXTURE_2D);
+        // GPU draws rectangle filled with shader
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         // Drawing the interface on the screen
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -206,7 +260,9 @@ int main()
         glfwSwapBuffers(window);
     }
 
-    glDeleteTextures(1, &textureID);
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shaderProgram);
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
