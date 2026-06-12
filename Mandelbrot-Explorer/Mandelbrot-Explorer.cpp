@@ -306,6 +306,87 @@ int main()
             ImGui::Text("Resolution: %d x %d px", width, height);
             ImGui::End();
         }
+        static ImVec2 dragStart(0, 0);
+        static bool isDragging = false;
+
+        if (!ImGui::GetIO().WantCaptureMouse) {
+
+            if (ImGui::IsMouseClicked(0)) {
+                dragStart = ImGui::GetMousePos();
+                isDragging = true;
+            }
+
+            if (isDragging && ImGui::IsMouseDragging(0)) {
+                ImVec2 dragCurrent = ImGui::GetMousePos();
+
+                // Calculate current offset
+                float dx = dragCurrent.x - dragStart.x;
+                float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
+
+                // Force 16:9 aspect ratio based on width
+                float absDx = fabs(dx);
+                float absDy = absDx * (9.0f / 16.0f);
+
+                // Get vertical drag direction
+                float signY = (dragCurrent.y >= dragStart.y) ? 1.0f : -1.0f;
+
+                // Calculate 16:9 rectangle end point
+                ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
+
+                // Draw 16:9 gold frame
+                ImDrawList* drawList = ImGui::GetForegroundDrawList();
+                drawList->AddRect(dragStart, lockedEnd, IM_COL32(255, 215, 0, 255), 0.0f, 0, 2.0f); // Gold frame
+            }
+
+            if (isDragging && ImGui::IsMouseReleased(0)) {
+                ImVec2 dragEnd = ImGui::GetMousePos();
+                isDragging = false;
+
+                float dx = dragEnd.x - dragStart.x;
+
+                // Min 10px threshold to prevent accidental clicks
+                if (fabs(dx) > 10.0f) {
+                    float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
+                    float absDx = fabs(dx);
+                    float absDy = absDx * (9.0f / 16.0f);
+                    float signY = (dragEnd.y >= dragStart.y) ? 1.0f : -1.0f;
+
+                    // Reconstruct 16:9 end point
+                    ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
+
+                    // Map to OpenGL coordinates (Y-up)
+                    double x1 = dragStart.x;
+                    double y1 = height - dragStart.y;
+                    double x2 = lockedEnd.x;
+                    double y2 = height - lockedEnd.y;
+
+                    // Sort min/max
+                    double screenMinX = std::min(x1, x2);
+                    double screenMaxX = std::max(x1, x2);
+                    double screenMinY = std::min(y1, y2);
+                    double screenMaxY = std::max(y1, y2);
+
+                    // Convert pixels to complex plane
+                    double currentRangeR = maxR - minR;
+                    double currentRangeI = maxI - minI;
+
+                    double newMinR = minR + (screenMinX / width) * currentRangeR;
+                    double newMaxR = minR + (screenMaxX / width) * currentRangeR;
+                    double newMinI = minI + (screenMinY / height) * currentRangeI;
+                    double newMaxI = minI + (screenMaxY / height) * currentRangeI;
+
+                    // Update fractal world bounds
+                    minR = newMinR;
+                    maxR = newMaxR;
+                    minI = newMinI;
+                    maxI = newMaxI;
+                }
+            }
+        }
+        else {
+            isDragging = false;
+        }
+        
         // Scroll zoom
         if (!ImGui::GetIO().WantCaptureMouse) {
             float wheel = ImGui::GetIO().MouseWheel;
