@@ -163,6 +163,7 @@ int main()
     int height = 720;
     float scale = 1;
     bool useFP64 = false;
+    bool showSettings = true;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -257,6 +258,10 @@ int main()
 
                 if (ImGui::BeginMenu("File")) {
 
+                    if (ImGui::MenuItem(useFP64 ? "useFP32" : "useFP64")) {
+                        useFP64 = !useFP64;
+                    }
+
                     ImGui::Separator();
 
                     if (ImGui::MenuItem("Exit")) {
@@ -265,26 +270,37 @@ int main()
 
                     ImGui::EndMenu();
                 }
+
+                
+                if (ImGui::BeginMenu("Window")) {
+
+                    if (ImGui::MenuItem("Settings")) {
+                        showSettings = !showSettings;
+                    }
+                    ImGui::EndMenu();
+                }
                 ImGui::EndMainMenuBar();
             }
 
-            ImGui::Begin("Settings");
+            if ( showSettings ){
+                ImGui::Begin("Settings");
 
-            ImGui::Text("Mandelbrot Explorer");
+                ImGui::Text("Mandelbrot Explorer");
 
-            if (ImGui::Button("Click me")) {
-                counter++;
+                if (ImGui::Button("Click me")) {
+                    counter++;
+                }
+                ImGui::SameLine();
+                ImGui::Text("Clicks = %d", counter);
+
+                ImGui::Checkbox("Use FP64?", &useFP64);
+
+                ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
+
+                ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::Text("Resolution: %d x %d px", width, height);
+                ImGui::End();
             }
-            ImGui::SameLine();
-            ImGui::Text("Clicks = %d", counter);
-
-            ImGui::Checkbox("Use FP64?", &useFP64);
-            
-            ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
-
-            ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::Text("Resolution: %d x %d px", width, height);
-            ImGui::End();
         }
         
         // Rendering ImGui
