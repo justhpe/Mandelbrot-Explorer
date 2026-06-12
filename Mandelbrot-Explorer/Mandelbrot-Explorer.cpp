@@ -272,6 +272,26 @@ int main()
 
             ImGui::Text("Mandelbrot Explorer");
 
+            if (ImGui::Button("Reset View")) {
+                minR = -2.0; maxR = 1.0; minI = -1.2; maxI = 1.2;
+            }
+
+            // Current width in complex numbers
+            double currentWidth = maxR - minR;
+            double zoomLevel = 3.0 / currentWidth;
+
+            ImGui::Separator();
+            ImGui::Text("Zoom stats:");
+
+            if (zoomLevel > 10000.0) {
+                ImGui::Text("Zoom: %.2e x", zoomLevel);
+            }
+            else {
+                ImGui::Text("Zoom: %.1f x", zoomLevel);
+            }
+
+            ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
+
             if (ImGui::Button("Click me")) {
                 counter++;
             }
@@ -285,6 +305,44 @@ int main()
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::Text("Resolution: %d x %d px", width, height);
             ImGui::End();
+        }
+        // Scroll zoom
+        if (!ImGui::GetIO().WantCaptureMouse) {
+            float wheel = ImGui::GetIO().MouseWheel;
+
+            if (wheel != 0.0f) {
+                ImVec2 mousePos = ImGui::GetMousePos();
+
+                // Mapping the current mouse position to the complex plane
+                double mouseOpenGlX = mousePos.x;
+                double mouseOpenGlY = height - mousePos.y;
+
+                double currentRangeR = maxR - minR;
+                double currentRangeI = maxI - minI;
+
+                double mouseR = minR + (mouseOpenGlX / width) * currentRangeR;
+                double mouseI = minI + (mouseOpenGlY / height) * currentRangeI;
+
+                double zoomFactor = 1.0;
+                if (wheel > 0.0f) {
+                    zoomFactor = 0.85; // zoom in
+                }
+                else {
+                    zoomFactor = 1.15; // zoom out
+                }
+
+                double newRangeR = currentRangeR * zoomFactor;
+                double newRangeI = currentRangeI * zoomFactor;
+
+                // Cursor is an anchor
+                double ratioX = mouseOpenGlX / width;
+                double ratioY = mouseOpenGlY / height;
+
+                minR = mouseR - ratioX * newRangeR;
+                maxR = mouseR + (1.0 - ratioX) * newRangeR;
+                minI = mouseI - ratioY * newRangeI;
+                maxI = mouseI + (1.0 - ratioY) * newRangeI;
+            }
         }
         
         // Rendering ImGui
