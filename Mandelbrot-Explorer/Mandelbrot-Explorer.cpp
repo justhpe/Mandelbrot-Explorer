@@ -5,6 +5,8 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include <algorithm> // Potrzebne do std::min i std::max
+#include <cmath>     // Potrzebne do funkcji log()
 
 #include <glfw3.h>
 
@@ -18,7 +20,7 @@ const char* vertexShaderSource = R"(
 )";
 
 
-// Fragment Shader Code (FP64)
+// Fragment Shader Code (FP64) - Pozostawiony bez zmian
 const char* fragmentShaderSourceFP64 = R"(
     // Fragment Shader Code (FP64)
     #version 460 core
@@ -63,7 +65,7 @@ const char* fragmentShaderSourceFP64 = R"(
     }
 )";
 
-// Fragment Shader Code (FP32)
+// Fragment Shader Code (FP32) - ZAKTUALIZOWANY O PŁYNNE KOLORY Z WIKIPEDII
 const char* fragmentShaderSourceFP32 = R"(
     // Fragment Shader Code (FP32)
     #version 460 core
@@ -76,6 +78,18 @@ const char* fragmentShaderSourceFP32 = R"(
     uniform double u_maxI;
     uniform int u_max_iterations;
 
+    // Funkcja interpolująca paletę kolorów (Czarny -> Granat -> Błękit -> Biel -> Pomarańcz -> Czarny)
+    vec3 getColor(float t) {
+        t = fract(t); // Zapętlenie wartości w przedziale [0.0, 1.0]
+        vec3 col;
+        if (t < 0.16)      col = mix(vec3(0.0, 0.0, 0.1), vec3(0.1, 0.3, 0.8), t / 0.16);
+        else if (t < 0.42) col = mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.95, 1.0), (t - 0.16) / 0.26);
+        else if (t < 0.64) col = mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.6, 0.0), (t - 0.42) / 0.22);
+        else if (t < 0.85) col = mix(vec3(1.0, 0.6, 0.0), vec3(0.0, 0.0, 0.0), (t - 0.64) / 0.21);
+        else               col = mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.1), (t - 0.85) / 0.15);
+        return col;
+    }
+
     void main() {
         // Mapping pixel pos to the complex plane
         double cr_d = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
@@ -86,13 +100,12 @@ const char* fragmentShaderSourceFP32 = R"(
         float cj = float(cj_d);
         int max_iterations = u_max_iterations;
 
-
         float zr = 0.0; // Re part
         float zj = 0.0; // Im part
         int count = 0;
 
-        // |z| < 2   --->   zr^2 + zj^2 < 4
-        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
+        // ZMIANA KONIECZNA: Zwiększono próg ucieczki z 4.0 na 256.0 dla gładkiego cieniowania
+        while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
             float temp = zr * zr - zj * zj + cr;
             zj = 2.0 * zr * zj + cj;
@@ -102,12 +115,21 @@ const char* fragmentShaderSourceFP32 = R"(
 
 
         if (count == max_iterations) {
-            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Wnętrze zbioru (czarne)
         } else {
-            float r = float(count * 2) / 255.0;
-            float g = float(count * 5) / 255.0;
-            float b = float(count) / 255.0;
-            FragColor = vec4(r, g, b, 1.0);
+            // Matematyczne wygładzanie przejść (Smooth Coloring oparty o ciągły potencjał)
+            float z_sq = zr * zr + zj * zj;
+            float log_z = log(z_sq) / 2.0;
+            float nu = log(log_z / log(2.0)) / log(2.0);
+            
+            // Wyznaczenie ułamkowej (niecałkowitej) liczby iteracji
+            float smooth_iter = float(count) + 1.0 - nu;
+
+            // Mnożnik 0.05 odpowiada za częstotliwość powtarzania się palety (szerokość pasów)
+            float color_index = smooth_iter * 0.05;
+            
+            vec3 final_color = getColor(color_index);
+            FragColor = vec4(final_color, 1.0);
         }
     }
 )";
@@ -299,7 +321,7 @@ int main()
             ImGui::Text("Clicks = %d", counter);
 
             ImGui::Checkbox("Use FP64?", &useFP64);
-            
+
             ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -386,7 +408,7 @@ int main()
         else {
             isDragging = false;
         }
-        
+
         // Scroll zoom
         if (!ImGui::GetIO().WantCaptureMouse) {
             float wheel = ImGui::GetIO().MouseWheel;
@@ -425,7 +447,7 @@ int main()
                 maxI = mouseI + (1.0 - ratioY) * newRangeI;
             }
         }
-        
+
         // Rendering ImGui
         ImGui::Render();
 
@@ -434,7 +456,7 @@ int main()
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        GLuint shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
+        shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
 
         // GPU program starts here
         glUseProgram(shaderProgram);
@@ -460,7 +482,6 @@ int main()
 
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shaderProgram);
     glDeleteProgram(shaderProgramFP32);
     glDeleteProgram(shaderProgramFP64);
     ImGui_ImplOpenGL3_Shutdown();
@@ -469,6 +490,4 @@ int main()
 
     glfwDestroyWindow(window);
     glfwTerminate();
-    
-
 }
