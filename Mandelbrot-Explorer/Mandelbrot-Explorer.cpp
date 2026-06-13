@@ -278,7 +278,7 @@ int main()
     double targetMinI = minI;
     double targetMaxI = maxI;
 
-    double zoomSpeed = 0.1;
+    float zoomSpeed = 0.1;
 
     int max_iterations = 100;
 
@@ -416,6 +416,8 @@ int main()
             ImGui::Checkbox("Burning Ship", &showBurningShip);
 
             ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
+
+            ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
             ImGui::Separator();
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
