@@ -384,7 +384,10 @@ int main()
             ImGui::Text("Mandelbrot Explorer");
 
             if (ImGui::Button("Reset View")) {
-                minR = -2.0; maxR = 1.0; minI = -1.2; maxI = 1.2;
+                targetMinR = -2.0; 
+                targetMaxR = 1.0; 
+                targetMinI = -1.2; 
+                targetMaxI = 1.2;
             }
 
             // Current width in complex numbers
@@ -538,10 +541,10 @@ int main()
                 double ratioX = mouseOpenGlX / width;
                 double ratioY = mouseOpenGlY / height;
 
-                minR = mouseR - ratioX * newRangeR;
-                maxR = mouseR + (1.0 - ratioX) * newRangeR;
-                minI = mouseI - ratioY * newRangeI;
-                maxI = mouseI + (1.0 - ratioY) * newRangeI;
+                targetMinR = mouseR - ratioX * newRangeR;
+                targetMaxR = mouseR + (1.0 - ratioX) * newRangeR;
+                targetMinI = mouseI - ratioY * newRangeI;
+                targetMaxI = mouseI + (1.0 - ratioY) * newRangeI;
             }
         }
 
