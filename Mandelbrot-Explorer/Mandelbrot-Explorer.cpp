@@ -272,6 +272,14 @@ int main()
     double minI = -1.2;
     double maxI = 1.2;
 
+    // For smooth zoom
+    double targetMinR = minR;
+    double targetMaxR = maxR;
+    double targetMinI = minI;
+    double targetMaxI = maxI;
+
+    double zoomSpeed = 0.1;
+
     int max_iterations = 100;
 
     // GLFW Init
@@ -485,10 +493,10 @@ int main()
                     double newMaxI = minI + (screenMaxY / height) * currentRangeI;
 
                     // Update fractal world bounds
-                    minR = newMinR;
-                    maxR = newMaxR;
-                    minI = newMinI;
-                    maxI = newMaxI;
+                    targetMinR = newMinR;
+                    targetMaxR = newMaxR;
+                    targetMinI = newMinI;
+                    targetMaxI = newMaxI;
                 }
             }
         }
@@ -547,6 +555,12 @@ int main()
 
         // GPU program starts here
         glUseProgram(shaderProgram);
+
+		// Linear Interpolation for smooth zooming
+        minR += (targetMinR - minR) * zoomSpeed;
+        maxR += (targetMaxR - maxR) * zoomSpeed;
+        minI += (targetMinI - minI) * zoomSpeed;
+        maxI += (targetMaxI - maxI) * zoomSpeed;
 
         // Sending variables to Shader code
         glUniform2f(glGetUniformLocation(shaderProgram, "u_resolution"), (float)width, (float)height);
