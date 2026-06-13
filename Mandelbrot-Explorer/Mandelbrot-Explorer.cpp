@@ -5,6 +5,8 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include <algorithm>
+#include <cmath>
 
 #include <glfw3.h>
 
@@ -30,35 +32,84 @@ const char* fragmentShaderSourceFP64 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
+    uniform bool u_burning_ship;
+    uniform int u_color_set; 
+
+    // Paleta 0: Wikipedia
+    vec3 getWiki(float t) {
+        t = fract(t);
+        if (t < 0.16)      return mix(vec3(0.0, 0.0, 0.1), vec3(0.1, 0.3, 0.8), t / 0.16);
+        else if (t < 0.42) return mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.95, 1.0), (t - 0.16) / 0.26);
+        else if (t < 0.64) return mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.6, 0.0), (t - 0.42) / 0.22);
+        else if (t < 0.85) return mix(vec3(1.0, 0.6, 0.0), vec3(0.0, 0.0, 0.0), (t - 0.64) / 0.21);
+        else               return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.1), (t - 0.85) / 0.15);
+    }
+
+    // Paleta 1: Ogień (Fire)
+    vec3 getFire(float t) {
+        t = fract(t);
+        if (t < 0.25)      return mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), t / 0.25);
+        else if (t < 0.50) return mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.25) / 0.25);
+        else if (t < 0.75) return mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.50) / 0.25);
+        else               return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 1.0, 1.0), (t - 0.75) / 0.25);
+    }
+
+    // Paleta 2: Lód (Ice)
+    vec3 getIce(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.8, 1.0), (t - 0.33) / 0.33);
+        else               return mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    // Paleta 3: Neon
+    vec3 getNeon(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.3, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.3, 0.0, 0.5), vec3(1.0, 0.0, 0.8), (t - 0.33) / 0.33);
+        else               return mix(vec3(1.0, 0.0, 0.8), vec3(0.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    vec3 getColor(float t) {
+        if (u_color_set == 1) return getFire(t);
+        if (u_color_set == 2) return getIce(t);
+        if (u_color_set == 3) return getNeon(t);
+        return getWiki(t); 
+    }
 
     void main() {
-        // Mapping pixel pos to the complex plane
         double cr = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
         double cj = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
         int max_iterations = u_max_iterations;
 
-
-        double zr = 0.0; // Re part
-        double zj = 0.0; // Im part
+        double zr = 0.0;
+        double zj = 0.0;
         int count = 0;
 
-        // |z| < 2   --->   zr^2 + zj^2 < 4
-        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+        while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             double temp = zr * zr - zj * zj + cr;
-            zj = 2.0 * zr * zj + cj;
+            
+            if (u_burning_ship) {
+                zj = -abs(2.0 * zr * zj) + cj;
+            } else {
+                zj = 2.0 * zr * zj + cj;
+            }
+            
             zr = temp;
             count++;
         }
 
-
         if (count == max_iterations) {
-            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         } else {
-            float r = float(count * 2) / 255.0;
-            float g = float(count * 5) / 255.0;
-            float b = float(count) / 255.0;
-            FragColor = vec4(r, g, b, 1.0);
+            float f_z_sq = float(zr * zr + zj * zj);
+            float log_z = log(f_z_sq) / 2.0;
+            float nu = log(log_z / log(2.0)) / log(2.0);
+            
+            float smooth_iter = float(count) + 1.0 - nu;
+
+            float color_index = smooth_iter * 0.05;
+            FragColor = vec4(getColor(color_index), 1.0);
         }
     }
 )";
@@ -75,43 +126,90 @@ const char* fragmentShaderSourceFP32 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
+    uniform bool u_burning_ship;
+    uniform int u_color_set;
+
+    // Paleta 0: Wikipedia
+    vec3 getWiki(float t) {
+        t = fract(t);
+        if (t < 0.16)      return mix(vec3(0.0, 0.0, 0.1), vec3(0.1, 0.3, 0.8), t / 0.16);
+        else if (t < 0.42) return mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.95, 1.0), (t - 0.16) / 0.26);
+        else if (t < 0.64) return mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.6, 0.0), (t - 0.42) / 0.22);
+        else if (t < 0.85) return mix(vec3(1.0, 0.6, 0.0), vec3(0.0, 0.0, 0.0), (t - 0.64) / 0.21);
+        else               return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.1), (t - 0.85) / 0.15);
+    }
+
+    // Paleta 1: Ogień (Fire)
+    vec3 getFire(float t) {
+        t = fract(t);
+        if (t < 0.25)      return mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), t / 0.25);
+        else if (t < 0.50) return mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.25) / 0.25);
+        else if (t < 0.75) return mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.50) / 0.25);
+        else               return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 1.0, 1.0), (t - 0.75) / 0.25);
+    }
+
+    // Paleta 2: Lód (Ice)
+    vec3 getIce(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.8, 1.0), (t - 0.33) / 0.33);
+        else               return mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    // Paleta 3: Neon
+    vec3 getNeon(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.3, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.3, 0.0, 0.5), vec3(1.0, 0.0, 0.8), (t - 0.33) / 0.33);
+        else               return mix(vec3(1.0, 0.0, 0.8), vec3(0.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    vec3 getColor(float t) {
+        if (u_color_set == 1) return getFire(t);
+        if (u_color_set == 2) return getIce(t);
+        if (u_color_set == 3) return getNeon(t);
+        return getWiki(t); 
+    }
 
     void main() {
-        // Mapping pixel pos to the complex plane
         double cr_d = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
         double cj_d = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
 
-        // FP32 optimization
         float cr = float(cr_d);
         float cj = float(cj_d);
         int max_iterations = u_max_iterations;
 
-
-        float zr = 0.0; // Re part
-        float zj = 0.0; // Im part
+        float zr = 0.0; 
+        float zj = 0.0; 
         int count = 0;
 
-        // |z| < 2   --->   zr^2 + zj^2 < 4
-        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+        while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             float temp = zr * zr - zj * zj + cr;
-            zj = 2.0 * zr * zj + cj;
+            
+            if (u_burning_ship) {
+                zj = -abs(2.0 * zr * zj) + cj;
+            } else {
+                zj = 2.0 * zr * zj + cj;
+            }
+            
             zr = temp;
             count++;
         }
 
-
         if (count == max_iterations) {
-            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0); 
         } else {
-            float r = float(count * 2) / 255.0;
-            float g = float(count * 5) / 255.0;
-            float b = float(count) / 255.0;
-            FragColor = vec4(r, g, b, 1.0);
+            float z_sq = zr * zr + zj * zj;
+            float log_z = log(z_sq) / 2.0;
+            float nu = log(log_z / log(2.0)) / log(2.0);
+            
+            float smooth_iter = float(count) + 1.0 - nu;
+
+            float color_index = smooth_iter * 0.05;
+            FragColor = vec4(getColor(color_index), 1.0);
         }
     }
 )";
-
 
 
 // Shader compilation
@@ -155,6 +253,7 @@ int mandelbrot(double cr, double cj, int max_iterations) {
     return count;
 }
 
+
 int main()
 {
 
@@ -163,6 +262,10 @@ int main()
     int height = 720;
     float scale = 1;
     bool useFP64 = false;
+    bool showBurningShip = false;
+
+    int current_palette = 0;
+    const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -298,14 +401,20 @@ int main()
             ImGui::SameLine();
             ImGui::Text("Clicks = %d", counter);
 
+            ImGui::Separator();
+            ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
+
             ImGui::Checkbox("Use FP64?", &useFP64);
-            
+            ImGui::Checkbox("Burning Ship", &showBurningShip);
+
             ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
+            ImGui::Separator();
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             ImGui::Text("Resolution: %d x %d px", width, height);
             ImGui::End();
         }
+
         static ImVec2 dragStart(0, 0);
         static bool isDragging = false;
 
@@ -386,7 +495,7 @@ int main()
         else {
             isDragging = false;
         }
-        
+
         // Scroll zoom
         if (!ImGui::GetIO().WantCaptureMouse) {
             float wheel = ImGui::GetIO().MouseWheel;
@@ -425,7 +534,7 @@ int main()
                 maxI = mouseI + (1.0 - ratioY) * newRangeI;
             }
         }
-        
+
         // Rendering ImGui
         ImGui::Render();
 
@@ -434,7 +543,7 @@ int main()
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        GLuint shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
+        shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
 
         // GPU program starts here
         glUseProgram(shaderProgram);
@@ -446,6 +555,9 @@ int main()
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxR"), maxR);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
+
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), showBurningShip);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_color_set"), current_palette);
 
         // GPU draws rectangle filled with shader
         glBindVertexArray(VAO);
@@ -460,7 +572,6 @@ int main()
 
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shaderProgram);
     glDeleteProgram(shaderProgramFP32);
     glDeleteProgram(shaderProgramFP64);
     ImGui_ImplOpenGL3_Shutdown();
@@ -469,6 +580,5 @@ int main()
 
     glfwDestroyWindow(window);
     glfwTerminate();
-    
 
 }
