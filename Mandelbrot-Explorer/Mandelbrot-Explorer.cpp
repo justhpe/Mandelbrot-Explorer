@@ -272,6 +272,14 @@ int main()
     double minI = -1.2;
     double maxI = 1.2;
 
+    // For smooth zoom
+    double targetMinR = minR;
+    double targetMaxR = maxR;
+    double targetMinI = minI;
+    double targetMaxI = maxI;
+
+    float zoomSpeed = 0.1;
+
     int max_iterations = 100;
 
     // GLFW Init
@@ -376,7 +384,10 @@ int main()
             ImGui::Text("Mandelbrot Explorer");
 
             if (ImGui::Button("Reset View")) {
-                minR = -2.0; maxR = 1.0; minI = -1.2; maxI = 1.2;
+                targetMinR = -2.0; 
+                targetMaxR = 1.0; 
+                targetMinI = -1.2; 
+                targetMaxI = 1.2;
             }
 
             // Current width in complex numbers
@@ -408,6 +419,8 @@ int main()
             ImGui::Checkbox("Burning Ship", &showBurningShip);
 
             ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
+
+            ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
             ImGui::Separator();
             ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -485,10 +498,10 @@ int main()
                     double newMaxI = minI + (screenMaxY / height) * currentRangeI;
 
                     // Update fractal world bounds
-                    minR = newMinR;
-                    maxR = newMaxR;
-                    minI = newMinI;
-                    maxI = newMaxI;
+                    targetMinR = newMinR;
+                    targetMaxR = newMaxR;
+                    targetMinI = newMinI;
+                    targetMaxI = newMaxI;
                 }
             }
         }
@@ -528,10 +541,10 @@ int main()
                 double ratioX = mouseOpenGlX / width;
                 double ratioY = mouseOpenGlY / height;
 
-                minR = mouseR - ratioX * newRangeR;
-                maxR = mouseR + (1.0 - ratioX) * newRangeR;
-                minI = mouseI - ratioY * newRangeI;
-                maxI = mouseI + (1.0 - ratioY) * newRangeI;
+                targetMinR = mouseR - ratioX * newRangeR;
+                targetMaxR = mouseR + (1.0 - ratioX) * newRangeR;
+                targetMinI = mouseI - ratioY * newRangeI;
+                targetMaxI = mouseI + (1.0 - ratioY) * newRangeI;
             }
         }
 
@@ -547,6 +560,12 @@ int main()
 
         // GPU program starts here
         glUseProgram(shaderProgram);
+
+		// Linear Interpolation for smooth zooming
+        minR += (targetMinR - minR) * zoomSpeed;
+        maxR += (targetMaxR - maxR) * zoomSpeed;
+        minI += (targetMinI - minI) * zoomSpeed;
+        maxI += (targetMaxI - maxI) * zoomSpeed;
 
         // Sending variables to Shader code
         glUniform2f(glGetUniformLocation(shaderProgram, "u_resolution"), (float)width, (float)height);
