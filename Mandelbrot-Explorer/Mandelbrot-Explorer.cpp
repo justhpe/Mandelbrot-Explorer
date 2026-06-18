@@ -20,9 +20,8 @@ const char* vertexShaderSource = R"(
 )";
 
 
-// Fragment Shader Code (FP64)
+// Fragment Shader Code (FP64 - wysoka precyzja)
 const char* fragmentShaderSourceFP64 = R"(
-    // Fragment Shader Code (FP64)
     #version 460 core
     out vec4 FragColor;
 
@@ -32,7 +31,9 @@ const char* fragmentShaderSourceFP64 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
-    uniform bool u_burning_ship;
+    uniform int u_fractal_type; // 0 = Mandelbrot, 1 = Burning Ship, 2 = Julia
+    uniform double u_julia_c_r;
+    uniform double u_julia_c_i;
     uniform int u_color_set; 
 
     // Paleta 0: Wikipedia
@@ -78,20 +79,34 @@ const char* fragmentShaderSourceFP64 = R"(
     }
 
     void main() {
-        double cr = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
-        double cj = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
+        double cr_pixel = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
+        double cj_pixel = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
         int max_iterations = u_max_iterations;
 
-        double zr = 0.0;
-        double zj = 0.0;
+        double zr, zj, cr, cj;
+
+        if (u_fractal_type == 2) {
+            // Zbiór Julii
+            zr = cr_pixel;
+            zj = cj_pixel;
+            cr = u_julia_c_r;
+            cj = u_julia_c_i;
+        } else {
+            // Mandelbrot lub Burning Ship
+            zr = 0.0;
+            zj = 0.0;
+            cr = cr_pixel;
+            cj = cj_pixel;
+        }
+
         int count = 0;
 
         while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             double temp = zr * zr - zj * zj + cr;
             
-            if (u_burning_ship) {
+            if (u_fractal_type == 1) { // Burning Ship
                 zj = -abs(2.0 * zr * zj) + cj;
-            } else {
+            } else { // Mandelbrot & Julia
                 zj = 2.0 * zr * zj + cj;
             }
             
@@ -114,9 +129,8 @@ const char* fragmentShaderSourceFP64 = R"(
     }
 )";
 
-// Fragment Shader Code (FP32)
+// Fragment Shader Code (FP32 - szybki, ale mniej precyzyjny)
 const char* fragmentShaderSourceFP32 = R"(
-    // Fragment Shader Code (FP32)
     #version 460 core
     out vec4 FragColor;
 
@@ -126,7 +140,9 @@ const char* fragmentShaderSourceFP32 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
-    uniform bool u_burning_ship;
+    uniform int u_fractal_type;
+    uniform double u_julia_c_r;
+    uniform double u_julia_c_i;
     uniform int u_color_set;
 
     // Paleta 0: Wikipedia
@@ -175,18 +191,30 @@ const char* fragmentShaderSourceFP32 = R"(
         double cr_d = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
         double cj_d = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
 
-        float cr = float(cr_d);
-        float cj = float(cj_d);
+        float cr_pixel = float(cr_d);
+        float cj_pixel = float(cj_d);
         int max_iterations = u_max_iterations;
 
-        float zr = 0.0; 
-        float zj = 0.0; 
+        float zr, zj, cr, cj;
+
+        if (u_fractal_type == 2) {
+            zr = cr_pixel;
+            zj = cj_pixel;
+            cr = float(u_julia_c_r);
+            cj = float(u_julia_c_i);
+        } else {
+            zr = 0.0;
+            zj = 0.0;
+            cr = cr_pixel;
+            cj = cj_pixel;
+        }
+
         int count = 0;
 
         while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             float temp = zr * zr - zj * zj + cr;
             
-            if (u_burning_ship) {
+            if (u_fractal_type == 1) { // Burning Ship
                 zj = -abs(2.0 * zr * zj) + cj;
             } else {
                 zj = 2.0 * zr * zj + cj;
@@ -233,37 +261,19 @@ GLuint compileShaders(const char* fragmentShaderSource) {
     return shaderProgram;
 }
 
-
-// Unused, as all compute are performed on GPU
-// It can be safely removed
-int mandelbrot(double cr, double cj, int max_iterations) {
-    double zr = 0.0; // Re part
-    double zj = 0.0; // Im part
-    int count = 0;
-
-    // |z| < 2   --->   zr^2 + zj^2 < 4
-    while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-        // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
-        double temp = zr * zr - zj * zj + cr;
-        zj = 2.0 * zr * zj + cj;
-        zr = temp;
-        count++;
-    }
-
-    return count;
-}
-
-
 int main()
 {
-
     // Config
     int width = 1280;
     int height = 720;
     float scale = 1;
-    bool useFP64 = false;
+    bool useFP64 = false; // Domyślnie na false
     int fractalMode = 0;
-    const char* fractalModes[] = { "Mandelbrot set", "Burning Ship" };
+    const char* fractalModes[] = { "Mandelbrot set", "Burning Ship", "Julia set" };
+
+    // Stałe dla Zbioru Julii
+    double julia_c_r = -0.7;
+    double julia_c_i = 0.27015;
 
     int current_palette = 0;
     const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
@@ -288,7 +298,8 @@ int main()
 
     float zoomSpeed = 0.1;
 
-    int max_iterations = 100;
+    int max_iterations = 150;
+    bool auto_iterations = true;
 
     // GLFW Init
     if (!glfwInit()) {
@@ -349,7 +360,7 @@ int main()
     }
 
     io.FontGlobalScale = 1.0f;
-    
+
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -399,48 +410,47 @@ int main()
         }
         // Restore aspect ratio constraint after a monitor change
         glfwSetWindowAspectRatio(window, 16, 9);
-     };
+        };
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-        // Event handling
         glfwPollEvents();
 
-        // Start new ImGui
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Obliczanie poziomu powiększenia (zoom) i szerokości
+        double currentWidth = maxR - minR;
+        double zoomLevel = 3.0 / currentWidth;
+
+        // Auto Iteracje
+        if (auto_iterations) {
+            int dynamic_iter = 100 + (int)(log10(std::max(1.0, zoomLevel)) * 120.0);
+            max_iterations = std::min(dynamic_iter, 3000);
+        }
+
         {
-			// Fullscreen shortcut
             if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
                 toggleFullscreen();
             }
 
             if (ImGui::BeginMainMenuBar()) {
-
                 if (ImGui::BeginMenu("File")) {
-
-                    if (ImGui::MenuItem(useFP64 ? "useFP32" : "useFP64")) {
+                    if (ImGui::MenuItem(useFP64 ? "Use FP32" : "Use FP64")) {
                         useFP64 = !useFP64;
                     }
-
                     ImGui::Separator();
-
                     if (ImGui::MenuItem("Exit")) {
                         glfwSetWindowShouldClose(window, GLFW_TRUE);
                     }
-
                     ImGui::EndMenu();
                 }
 
-                
                 if (ImGui::BeginMenu("Window")) {
-
                     if (ImGui::MenuItem("Settings")) {
                         showSettings = !showSettings;
                     }
-
                     if (ImGui::MenuItem("Toggle Fullscreen", "F11")) {
                         toggleFullscreen();
                     }
@@ -449,21 +459,17 @@ int main()
                 ImGui::EndMainMenuBar();
             }
 
-            if ( showSettings ){
+            if (showSettings) {
                 ImGui::Begin("Settings");
 
                 ImGui::Text("Mandelbrot Explorer");
 
                 if (ImGui::Button("Reset View")) {
-                    targetMinR = -2.0; 
-                    targetMaxR = 1.0; 
-                    targetMinI = -1.2; 
+                    targetMinR = -2.0;
+                    targetMaxR = 1.0;
+                    targetMinI = -1.2;
                     targetMaxI = 1.2;
                 }
-
-                // Current width in complex numbers
-                double currentWidth = maxR - minR;
-                double zoomLevel = 3.0 / currentWidth;
 
                 ImGui::Separator();
                 ImGui::Text("Zoom stats:");
@@ -479,10 +485,23 @@ int main()
 
                 ImGui::Separator();
                 ImGui::Combo("Color set", &current_palette, palettes, IM_ARRAYSIZE(palettes));
-
                 ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
 
-                ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
+                if (fractalMode == 2) {
+                    ImGui::Text("Opcje Zbioru Julii:");
+                    ImGui::InputDouble("Re(c)", &julia_c_r, 0.001, 0.01, "%.6f");
+                    ImGui::InputDouble("Im(c)", &julia_c_i, 0.001, 0.01, "%.6f");
+                }
+
+                ImGui::Separator();
+                ImGui::Checkbox("Auto-Adjust Iterations", &auto_iterations);
+
+                if (!auto_iterations) {
+                    ImGui::SliderInt("Max Iteration", &max_iterations, 10, 2000);
+                }
+                else {
+                    ImGui::Text("Obecne Iteracje: %d", max_iterations);
+                }
 
                 ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
@@ -506,55 +525,39 @@ int main()
 
             if (isDragging && ImGui::IsMouseDragging(0)) {
                 ImVec2 dragCurrent = ImGui::GetMousePos();
-
-                // Calculate current offset
                 float dx = dragCurrent.x - dragStart.x;
                 float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
-
-                // Force 16:9 aspect ratio based on width
                 float absDx = fabs(dx);
                 float absDy = absDx * (9.0f / 16.0f);
-
-                // Get vertical drag direction
                 float signY = (dragCurrent.y >= dragStart.y) ? 1.0f : -1.0f;
 
-                // Calculate 16:9 rectangle end point
                 ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
-
-                // Draw 16:9 gold frame
                 ImDrawList* drawList = ImGui::GetForegroundDrawList();
-                drawList->AddRect(dragStart, lockedEnd, IM_COL32(255, 215, 0, 255), 0.0f, 0, 2.0f); // Gold frame
+                drawList->AddRect(dragStart, lockedEnd, IM_COL32(255, 215, 0, 255), 0.0f, 0, 2.0f);
             }
 
             if (isDragging && ImGui::IsMouseReleased(0)) {
                 ImVec2 dragEnd = ImGui::GetMousePos();
                 isDragging = false;
-
                 float dx = dragEnd.x - dragStart.x;
 
-                // Min 10px threshold to prevent accidental clicks
                 if (fabs(dx) > 10.0f) {
                     float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
                     float absDx = fabs(dx);
                     float absDy = absDx * (9.0f / 16.0f);
                     float signY = (dragEnd.y >= dragStart.y) ? 1.0f : -1.0f;
 
-                    // Reconstruct 16:9 end point
                     ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
-
-                    // Map to OpenGL coordinates (Y-up)
                     double x1 = dragStart.x;
                     double y1 = height - dragStart.y;
                     double x2 = lockedEnd.x;
                     double y2 = height - lockedEnd.y;
 
-                    // Sort min/max
                     double screenMinX = std::min(x1, x2);
                     double screenMaxX = std::max(x1, x2);
                     double screenMinY = std::min(y1, y2);
                     double screenMaxY = std::max(y1, y2);
 
-                    // Convert pixels to complex plane
                     double currentRangeR = maxR - minR;
                     double currentRangeI = maxI - minI;
 
@@ -563,7 +566,6 @@ int main()
                     double newMinI = minI + (screenMinY / height) * currentRangeI;
                     double newMaxI = minI + (screenMaxY / height) * currentRangeI;
 
-                    // Update fractal world bounds
                     targetMinR = newMinR;
                     targetMaxR = newMaxR;
                     targetMinI = newMinI;
@@ -582,7 +584,6 @@ int main()
             if (wheel != 0.0f) {
                 ImVec2 mousePos = ImGui::GetMousePos();
 
-                // Mapping the current mouse position to the complex plane
                 double mouseOpenGlX = mousePos.x;
                 double mouseOpenGlY = height - mousePos.y;
 
@@ -603,7 +604,6 @@ int main()
                 double newRangeR = currentRangeR * zoomFactor;
                 double newRangeI = currentRangeI * zoomFactor;
 
-                // Cursor is an anchor
                 double ratioX = mouseOpenGlX / width;
                 double ratioY = mouseOpenGlY / height;
 
@@ -614,20 +614,16 @@ int main()
             }
         }
 
-        // Rendering ImGui
         ImGui::Render();
-
 
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
         shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
-
-        // GPU program starts here
         glUseProgram(shaderProgram);
 
-		// Linear Interpolation for smooth zooming
+        // Linear Interpolation for smooth zooming
         minR += (targetMinR - minR) * zoomSpeed;
         maxR += (targetMaxR - maxR) * zoomSpeed;
         minI += (targetMinI - minI) * zoomSpeed;
@@ -641,7 +637,9 @@ int main()
         glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
 
-        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), fractalMode == 1);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_fractal_type"), fractalMode);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_julia_c_r"), julia_c_r);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_julia_c_i"), julia_c_i);
         glUniform1i(glGetUniformLocation(shaderProgram, "u_color_set"), current_palette);
 
         // GPU draws rectangle filled with shader
@@ -666,4 +664,5 @@ int main()
     glfwDestroyWindow(window);
     glfwTerminate();
 
+    return 0;
 }
