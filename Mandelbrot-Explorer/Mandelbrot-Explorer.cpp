@@ -262,11 +262,18 @@ int main()
     int height = 720;
     float scale = 1;
     bool useFP64 = false;
-    bool showBurningShip = false;
+    int fractalMode = 0;
+    const char* fractalModes[] = { "Mandelbrot set", "Burning Ship" };
 
     int current_palette = 0;
     const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
     bool showSettings = true;
+
+    bool isFullscreen = false;
+    int windowedX = 100;
+    int windowedY = 100;
+    int windowedWidth = width;
+    int windowedHeight = height;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -305,6 +312,11 @@ int main()
     glfwSetWindowAspectRatio(window, 16, 9); // keep aspect ratio
     glfwSwapInterval(1); // V-Sync
 
+    // UI scaling
+    float xscale = 1.0f, yscale = 1.0f;
+    glfwGetWindowContentScale(window, &xscale, &yscale);
+    scale = xscale;
+
     // GLAD Init
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -318,16 +330,29 @@ int main()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-    // Interface scaling
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(scale);
-    io.FontGlobalScale = scale;
 
+    io.Fonts->Clear();
+    ImFont* font = nullptr;
+
+    font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f * scale);
+
+    if (font == nullptr) {
+        font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0f * scale);
+    }
+
+    if (font == nullptr) {
+        ImFontConfig config;
+        config.SizePixels = 13.0f * scale;
+        io.Fonts->AddFontDefault(&config);
+    }
+
+    io.FontGlobalScale = 1.0f;
+    
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-
-    int counter = 0;
 
     // Compiling the shader program
     GLuint shaderProgramFP32 = compileShaders(fragmentShaderSourceFP32);
@@ -354,6 +379,28 @@ int main()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    auto toggleFullscreen = [&]() {
+        isFullscreen = !isFullscreen;
+        if (isFullscreen) {
+            // Save current window position and size before going fullscreen
+            glfwGetWindowPos(window, &windowedX, &windowedY);
+            glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+
+            // Get primary monitor and its video mode
+            GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
+            // Switch to fullscreen
+            glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        }
+        else {
+            // Restore to windowed mode with saved dimensions
+            glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, 0);
+        }
+        // Restore aspect ratio constraint after a monitor change
+        glfwSetWindowAspectRatio(window, 16, 9);
+     };
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         // Event handling
@@ -365,6 +412,11 @@ int main()
         ImGui::NewFrame();
 
         {
+			// Fullscreen shortcut
+            if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
+                toggleFullscreen();
+            }
+
             if (ImGui::BeginMainMenuBar()) {
 
                 if (ImGui::BeginMenu("File")) {
@@ -387,6 +439,10 @@ int main()
 
                     if (ImGui::MenuItem("Settings")) {
                         showSettings = !showSettings;
+                    }
+
+                    if (ImGui::MenuItem("Toggle Fullscreen", "F11")) {
+                        toggleFullscreen();
                     }
                     ImGui::EndMenu();
                 }
@@ -419,26 +475,20 @@ int main()
                     ImGui::Text("Zoom: %.1f x", zoomLevel);
                 }
 
-                ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
-
-                if (ImGui::Button("Click me")) {
-                    counter++;
-                }
-                ImGui::SameLine();
-                ImGui::Text("Clicks = %d", counter);
+                ImGui::Text("Width (Delta R): %.2e", currentWidth);
 
                 ImGui::Separator();
-                ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
+                ImGui::Combo("Color set", &current_palette, palettes, IM_ARRAYSIZE(palettes));
 
-                ImGui::Checkbox("Use FP64?", &useFP64);
-                ImGui::Checkbox("Burning Ship", &showBurningShip);
+                ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
 
                 ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
                 ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
                 ImGui::Separator();
-                ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::Checkbox("Use FP64?", &useFP64);
+                ImGui::Text("Performance: %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
                 ImGui::Text("Resolution: %d x %d px", width, height);
                 ImGui::End();
             }
@@ -591,7 +641,7 @@ int main()
         glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
 
-        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), showBurningShip);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), fractalMode == 1);
         glUniform1i(glGetUniformLocation(shaderProgram, "u_color_set"), current_palette);
 
         // GPU draws rectangle filled with shader
