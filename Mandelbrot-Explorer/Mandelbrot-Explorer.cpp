@@ -493,7 +493,7 @@ int main()
                     ImGui::SliderInt("Max Iteration", &max_iterations, 10, 2000);
                 }
                 else {
-                    ImGui::Text("Obecne Iteracje: %d", max_iterations);
+                    ImGui::Text("Current Iterations: %d", max_iterations);
                 }
 
                 ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
