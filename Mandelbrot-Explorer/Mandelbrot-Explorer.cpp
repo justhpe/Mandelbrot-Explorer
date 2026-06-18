@@ -266,6 +266,7 @@ int main()
 
     int current_palette = 0;
     const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
+    bool showSettings = true;
 
     double minR = -2.0;
     double maxR = 1.0;
@@ -368,6 +369,10 @@ int main()
 
                 if (ImGui::BeginMenu("File")) {
 
+                    if (ImGui::MenuItem(useFP64 ? "useFP32" : "useFP64")) {
+                        useFP64 = !useFP64;
+                    }
+
                     ImGui::Separator();
 
                     if (ImGui::MenuItem("Exit")) {
@@ -376,56 +381,67 @@ int main()
 
                     ImGui::EndMenu();
                 }
+
+                
+                if (ImGui::BeginMenu("Window")) {
+
+                    if (ImGui::MenuItem("Settings")) {
+                        showSettings = !showSettings;
+                    }
+                    ImGui::EndMenu();
+                }
                 ImGui::EndMainMenuBar();
             }
 
-            ImGui::Begin("Settings");
+            if ( showSettings ){
+                ImGui::Begin("Settings");
 
-            ImGui::Text("Mandelbrot Explorer");
+                ImGui::Text("Mandelbrot Explorer");
 
-            if (ImGui::Button("Reset View")) {
-                targetMinR = -2.0; 
-                targetMaxR = 1.0; 
-                targetMinI = -1.2; 
-                targetMaxI = 1.2;
+                if (ImGui::Button("Reset View")) {
+                    targetMinR = -2.0; 
+                    targetMaxR = 1.0; 
+                    targetMinI = -1.2; 
+                    targetMaxI = 1.2;
+                }
+
+                // Current width in complex numbers
+                double currentWidth = maxR - minR;
+                double zoomLevel = 3.0 / currentWidth;
+
+                ImGui::Separator();
+                ImGui::Text("Zoom stats:");
+
+                if (zoomLevel > 10000.0) {
+                    ImGui::Text("Zoom: %.2e x", zoomLevel);
+                }
+                else {
+                    ImGui::Text("Zoom: %.1f x", zoomLevel);
+                }
+
+                ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
+
+                if (ImGui::Button("Click me")) {
+                    counter++;
+                }
+                ImGui::SameLine();
+                ImGui::Text("Clicks = %d", counter);
+
+                ImGui::Separator();
+                ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
+
+                ImGui::Checkbox("Use FP64?", &useFP64);
+                ImGui::Checkbox("Burning Ship", &showBurningShip);
+
+                ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
+
+                ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
+
+                ImGui::Separator();
+                ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::Text("Resolution: %d x %d px", width, height);
+                ImGui::End();
             }
-
-            // Current width in complex numbers
-            double currentWidth = maxR - minR;
-            double zoomLevel = 3.0 / currentWidth;
-
-            ImGui::Separator();
-            ImGui::Text("Zoom stats:");
-
-            if (zoomLevel > 10000.0) {
-                ImGui::Text("Zoom: %.2e x", zoomLevel);
-            }
-            else {
-                ImGui::Text("Zoom: %.1f x", zoomLevel);
-            }
-
-            ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
-
-            if (ImGui::Button("Click me")) {
-                counter++;
-            }
-            ImGui::SameLine();
-            ImGui::Text("Clicks = %d", counter);
-
-            ImGui::Separator();
-            ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
-
-            ImGui::Checkbox("Use FP64?", &useFP64);
-            ImGui::Checkbox("Burning Ship", &showBurningShip);
-
-            ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
-
-            ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
-
-            ImGui::Separator();
-            ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::Text("Resolution: %d x %d px", width, height);
-            ImGui::End();
         }
 
         static ImVec2 dragStart(0, 0);
