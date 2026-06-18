@@ -423,7 +423,6 @@ int main()
                 ImGui::Separator();
                 ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
 
-                ImGui::Checkbox("Use FP64?", &useFP64);
                 ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
 
                 ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
@@ -431,6 +430,7 @@ int main()
                 ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
                 ImGui::Separator();
+                ImGui::Checkbox("Use FP64?", &useFP64);
                 ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
                 ImGui::Text("Resolution: %d x %d px", width, height);
                 ImGui::End();
