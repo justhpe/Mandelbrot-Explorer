@@ -392,6 +392,11 @@ int main()
         ImGui::NewFrame();
 
         {
+			// Fullscreen shortcut
+            if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
+                toggleFullscreen();
+            }
+
             if (ImGui::BeginMainMenuBar()) {
 
                 if (ImGui::BeginMenu("File")) {
