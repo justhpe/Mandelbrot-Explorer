@@ -269,6 +269,12 @@ int main()
     const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
     bool showSettings = true;
 
+    bool isFullscreen = false;
+    int windowedX = 100;
+    int windowedY = 100;
+    int windowedWidth = width;
+    int windowedHeight = height;
+
     double minR = -2.0;
     double maxR = 1.0;
     double minI = -1.2;
@@ -353,6 +359,28 @@ int main()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    auto toggleFullscreen = [&]() {
+        isFullscreen = !isFullscreen;
+        if (isFullscreen) {
+            // Save current window position and size before going fullscreen
+            glfwGetWindowPos(window, &windowedX, &windowedY);
+            glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+
+            // Get primary monitor and its video mode
+            GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
+            // Switch to fullscreen
+            glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        }
+        else {
+            // Restore to windowed mode with saved dimensions
+            glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, 0);
+        }
+        // Restore aspect ratio constraint after a monitor change
+        glfwSetWindowAspectRatio(window, 16, 9);
+     };
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         // Event handling
@@ -386,6 +414,10 @@ int main()
 
                     if (ImGui::MenuItem("Settings")) {
                         showSettings = !showSettings;
+                    }
+
+                    if (ImGui::MenuItem("Toggle Fullscreen", "F11")) {
+                        toggleFullscreen();
                     }
                     ImGui::EndMenu();
                 }
