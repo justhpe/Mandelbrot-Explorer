@@ -267,7 +267,7 @@ int main()
     int width = 1280;
     int height = 720;
     float scale = 1;
-    bool useFP64 = false; // Domyœlnie na false (szybki tryb FP32)
+    bool useFP64 = false; // Domyœlnie na false
     int fractalMode = 0;
     const char* fractalModes[] = { "Mandelbrot set", "Burning Ship", "Julia set" };
 
@@ -299,7 +299,7 @@ int main()
     float zoomSpeed = 0.1;
 
     int max_iterations = 150;
-    bool auto_iterations = true; // Dynamiczne iteracje zapobiegaj¹ce lagom
+    bool auto_iterations = true;
 
     // GLFW Init
     if (!glfwInit()) {
@@ -417,11 +417,10 @@ int main()
         double currentWidth = maxR - minR;
         double zoomLevel = 3.0 / currentWidth;
 
-        // Auto Iteracje - zapobiegaj¹ lagom i daj¹ ostroœæ
+        // Auto Iteracje
         if (auto_iterations) {
-            // Skaluje iloœæ iteracji logarytmicznie w stosunku do zoomu.
             int dynamic_iter = 100 + (int)(log10(std::max(1.0, zoomLevel)) * 120.0);
-            max_iterations = std::min(dynamic_iter, 3000); // Twardy limit na 3000 aby uchroniæ GPU przed zwiech¹
+            max_iterations = std::min(dynamic_iter, 3000);
         }
 
         {
@@ -431,7 +430,7 @@ int main()
 
             if (ImGui::BeginMainMenuBar()) {
                 if (ImGui::BeginMenu("File")) {
-                    if (ImGui::MenuItem(useFP64 ? "Use FP32 (Szybki)" : "Use FP64 (Gleboki Zoom)")) {
+                    if (ImGui::MenuItem(useFP64 ? "Use FP32" : "Use FP64")) {
                         useFP64 = !useFP64;
                     }
                     ImGui::Separator();
@@ -488,7 +487,7 @@ int main()
                 }
 
                 ImGui::Separator();
-                ImGui::Checkbox("Auto-Adjust Iterations (Mniej lagow)", &auto_iterations);
+                ImGui::Checkbox("Auto-Adjust Iterations", &auto_iterations);
 
                 if (!auto_iterations) {
                     ImGui::SliderInt("Max Iteration", &max_iterations, 10, 2000);
@@ -500,7 +499,7 @@ int main()
                 ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
 
                 ImGui::Separator();
-                ImGui::Checkbox("Use FP64? (Wymagane do glebokiego zoomu)", &useFP64);
+                ImGui::Checkbox("Use FP64?", &useFP64);
                 ImGui::Text("Performance: %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
                 ImGui::Text("Resolution: %d x %d px", width, height);
                 ImGui::End();
