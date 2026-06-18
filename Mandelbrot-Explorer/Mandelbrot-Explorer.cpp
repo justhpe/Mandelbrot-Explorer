@@ -393,15 +393,22 @@ int main()
     auto toggleFullscreen = [&]() {
         isFullscreen = !isFullscreen;
         if (isFullscreen) {
+            // Save current window position and size before going fullscreen
             glfwGetWindowPos(window, &windowedX, &windowedY);
             glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+
+            // Get primary monitor and its video mode
             GLFWmonitor* monitor = glfwGetPrimaryMonitor();
             const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+
+            // Switch to fullscreen
             glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
         }
         else {
+            // Restore to windowed mode with saved dimensions
             glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, 0);
         }
+        // Restore aspect ratio constraint after a monitor change
         glfwSetWindowAspectRatio(window, 16, 9);
         };
 
