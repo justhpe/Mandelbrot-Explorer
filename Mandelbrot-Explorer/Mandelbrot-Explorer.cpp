@@ -327,8 +327,6 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    int counter = 0;
-
     // Compiling the shader program
     GLuint shaderProgramFP32 = compileShaders(fragmentShaderSourceFP32);
     GLuint shaderProgramFP64 = compileShaders(fragmentShaderSourceFP64);
@@ -420,12 +418,6 @@ int main()
                 }
 
                 ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
-
-                if (ImGui::Button("Click me")) {
-                    counter++;
-                }
-                ImGui::SameLine();
-                ImGui::Text("Clicks = %d", counter);
 
                 ImGui::Separator();
                 ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
