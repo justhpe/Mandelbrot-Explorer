@@ -262,7 +262,8 @@ int main()
     int height = 720;
     float scale = 1;
     bool useFP64 = false;
-    bool showBurningShip = false;
+    int fractalMode = 0;
+    const char* fractalModes[] = { "Mandelbrot set", "Burning Ship" };
 
     int current_palette = 0;
     const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
@@ -423,7 +424,7 @@ int main()
                 ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
 
                 ImGui::Checkbox("Use FP64?", &useFP64);
-                ImGui::Checkbox("Burning Ship", &showBurningShip);
+                ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
 
                 ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
 
@@ -583,7 +584,7 @@ int main()
         glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
 
-        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), showBurningShip);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_burning_ship"), fractalMode == 1);
         glUniform1i(glGetUniformLocation(shaderProgram, "u_color_set"), current_palette);
 
         // GPU draws rectangle filled with shader
