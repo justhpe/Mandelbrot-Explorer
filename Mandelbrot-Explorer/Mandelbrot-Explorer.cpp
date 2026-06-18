@@ -418,10 +418,10 @@ int main()
                     ImGui::Text("Zoom: %.1f x", zoomLevel);
                 }
 
-                ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
+                ImGui::Text("Width (Delta R): %.2e", currentWidth);
 
                 ImGui::Separator();
-                ImGui::Combo("Kolorystyka", &current_palette, palettes, IM_ARRAYSIZE(palettes));
+                ImGui::Combo("Color set", &current_palette, palettes, IM_ARRAYSIZE(palettes));
 
                 ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
 
@@ -431,7 +431,7 @@ int main()
 
                 ImGui::Separator();
                 ImGui::Checkbox("Use FP64?", &useFP64);
-                ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::Text("Performance: %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
                 ImGui::Text("Resolution: %d x %d px", width, height);
                 ImGui::End();
             }
