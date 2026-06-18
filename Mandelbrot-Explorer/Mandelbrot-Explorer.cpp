@@ -5,6 +5,8 @@
 #include <iostream>
 #include <vector>
 #include <cstdint>
+#include <algorithm>
+#include <cmath>
 
 #include <glfw3.h>
 
@@ -18,9 +20,8 @@ const char* vertexShaderSource = R"(
 )";
 
 
-// Fragment Shader Code (FP64)
+// Fragment Shader Code (FP64 - wysoka precyzja)
 const char* fragmentShaderSourceFP64 = R"(
-    // Fragment Shader Code (FP64)
     #version 460 core
     out vec4 FragColor;
 
@@ -30,42 +31,106 @@ const char* fragmentShaderSourceFP64 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
+    uniform int u_fractal_type; // 0 = Mandelbrot, 1 = Burning Ship, 2 = Julia
+    uniform double u_julia_c_r;
+    uniform double u_julia_c_i;
+    uniform int u_color_set; 
+
+    // Paleta 0: Wikipedia
+    vec3 getWiki(float t) {
+        t = fract(t);
+        if (t < 0.16)      return mix(vec3(0.0, 0.0, 0.1), vec3(0.1, 0.3, 0.8), t / 0.16);
+        else if (t < 0.42) return mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.95, 1.0), (t - 0.16) / 0.26);
+        else if (t < 0.64) return mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.6, 0.0), (t - 0.42) / 0.22);
+        else if (t < 0.85) return mix(vec3(1.0, 0.6, 0.0), vec3(0.0, 0.0, 0.0), (t - 0.64) / 0.21);
+        else               return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.1), (t - 0.85) / 0.15);
+    }
+
+    // Paleta 1: Ogieñ (Fire)
+    vec3 getFire(float t) {
+        t = fract(t);
+        if (t < 0.25)      return mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), t / 0.25);
+        else if (t < 0.50) return mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.25) / 0.25);
+        else if (t < 0.75) return mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.50) / 0.25);
+        else               return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 1.0, 1.0), (t - 0.75) / 0.25);
+    }
+
+    // Paleta 2: Lód (Ice)
+    vec3 getIce(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.8, 1.0), (t - 0.33) / 0.33);
+        else               return mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    // Paleta 3: Neon
+    vec3 getNeon(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.3, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.3, 0.0, 0.5), vec3(1.0, 0.0, 0.8), (t - 0.33) / 0.33);
+        else               return mix(vec3(1.0, 0.0, 0.8), vec3(0.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    vec3 getColor(float t) {
+        if (u_color_set == 1) return getFire(t);
+        if (u_color_set == 2) return getIce(t);
+        if (u_color_set == 3) return getNeon(t);
+        return getWiki(t); 
+    }
 
     void main() {
-        // Mapping pixel pos to the complex plane
-        double cr = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
-        double cj = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
+        double cr_pixel = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
+        double cj_pixel = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
         int max_iterations = u_max_iterations;
 
+        double zr, zj, cr, cj;
 
-        double zr = 0.0; // Re part
-        double zj = 0.0; // Im part
+        if (u_fractal_type == 2) {
+            // Zbiór Julii
+            zr = cr_pixel;
+            zj = cj_pixel;
+            cr = u_julia_c_r;
+            cj = u_julia_c_i;
+        } else {
+            // Mandelbrot lub Burning Ship
+            zr = 0.0;
+            zj = 0.0;
+            cr = cr_pixel;
+            cj = cj_pixel;
+        }
+
         int count = 0;
 
-        // |z| < 2   --->   zr^2 + zj^2 < 4
-        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+        while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             double temp = zr * zr - zj * zj + cr;
-            zj = 2.0 * zr * zj + cj;
+            
+            if (u_fractal_type == 1) { // Burning Ship
+                zj = -abs(2.0 * zr * zj) + cj;
+            } else { // Mandelbrot & Julia
+                zj = 2.0 * zr * zj + cj;
+            }
+            
             zr = temp;
             count++;
         }
 
-
         if (count == max_iterations) {
-            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         } else {
-            float r = float(count * 2) / 255.0;
-            float g = float(count * 5) / 255.0;
-            float b = float(count) / 255.0;
-            FragColor = vec4(r, g, b, 1.0);
+            float f_z_sq = float(zr * zr + zj * zj);
+            float log_z = log(f_z_sq) / 2.0;
+            float nu = log(log_z / log(2.0)) / log(2.0);
+            
+            float smooth_iter = float(count) + 1.0 - nu;
+
+            float color_index = smooth_iter * 0.05;
+            FragColor = vec4(getColor(color_index), 1.0);
         }
     }
 )";
 
-// Fragment Shader Code (FP32)
+// Fragment Shader Code (FP32 - szybki, ale mniej precyzyjny)
 const char* fragmentShaderSourceFP32 = R"(
-    // Fragment Shader Code (FP32)
     #version 460 core
     out vec4 FragColor;
 
@@ -75,43 +140,104 @@ const char* fragmentShaderSourceFP32 = R"(
     uniform double u_minI;
     uniform double u_maxI;
     uniform int u_max_iterations;
+    uniform int u_fractal_type;
+    uniform double u_julia_c_r;
+    uniform double u_julia_c_i;
+    uniform int u_color_set;
+
+    // Paleta 0: Wikipedia
+    vec3 getWiki(float t) {
+        t = fract(t);
+        if (t < 0.16)      return mix(vec3(0.0, 0.0, 0.1), vec3(0.1, 0.3, 0.8), t / 0.16);
+        else if (t < 0.42) return mix(vec3(0.1, 0.3, 0.8), vec3(0.9, 0.95, 1.0), (t - 0.16) / 0.26);
+        else if (t < 0.64) return mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.6, 0.0), (t - 0.42) / 0.22);
+        else if (t < 0.85) return mix(vec3(1.0, 0.6, 0.0), vec3(0.0, 0.0, 0.0), (t - 0.64) / 0.21);
+        else               return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.1), (t - 0.85) / 0.15);
+    }
+
+    // Paleta 1: Ogieñ (Fire)
+    vec3 getFire(float t) {
+        t = fract(t);
+        if (t < 0.25)      return mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), t / 0.25);
+        else if (t < 0.50) return mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 0.5, 0.0), (t - 0.25) / 0.25);
+        else if (t < 0.75) return mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 1.0, 0.0), (t - 0.50) / 0.25);
+        else               return mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 1.0, 1.0), (t - 0.75) / 0.25);
+    }
+
+    // Paleta 2: Lód (Ice)
+    vec3 getIce(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.0, 0.0, 0.5), vec3(0.0, 0.8, 1.0), (t - 0.33) / 0.33);
+        else               return mix(vec3(0.0, 0.8, 1.0), vec3(1.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    // Paleta 3: Neon
+    vec3 getNeon(float t) {
+        t = fract(t);
+        if (t < 0.33)      return mix(vec3(0.0, 0.0, 0.0), vec3(0.3, 0.0, 0.5), t / 0.33);
+        else if (t < 0.66) return mix(vec3(0.3, 0.0, 0.5), vec3(1.0, 0.0, 0.8), (t - 0.33) / 0.33);
+        else               return mix(vec3(1.0, 0.0, 0.8), vec3(0.0, 1.0, 1.0), (t - 0.66) / 0.34);
+    }
+
+    vec3 getColor(float t) {
+        if (u_color_set == 1) return getFire(t);
+        if (u_color_set == 2) return getIce(t);
+        if (u_color_set == 3) return getNeon(t);
+        return getWiki(t); 
+    }
 
     void main() {
-        // Mapping pixel pos to the complex plane
         double cr_d = u_minR + (gl_FragCoord.x / u_resolution.x) * (u_maxR - u_minR);
         double cj_d = u_minI + (gl_FragCoord.y / u_resolution.y) * (u_maxI - u_minI);
 
-        // FP32 optimization
-        float cr = float(cr_d);
-        float cj = float(cj_d);
+        float cr_pixel = float(cr_d);
+        float cj_pixel = float(cj_d);
         int max_iterations = u_max_iterations;
 
+        float zr, zj, cr, cj;
 
-        float zr = 0.0; // Re part
-        float zj = 0.0; // Im part
+        if (u_fractal_type == 2) {
+            zr = cr_pixel;
+            zj = cj_pixel;
+            cr = float(u_julia_c_r);
+            cj = float(u_julia_c_i);
+        } else {
+            zr = 0.0;
+            zj = 0.0;
+            cr = cr_pixel;
+            cj = cj_pixel;
+        }
+
         int count = 0;
 
-        // |z| < 2   --->   zr^2 + zj^2 < 4
-        while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-            // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
+        while (zr * zr + zj * zj <= 256.0 && count < max_iterations) {
             float temp = zr * zr - zj * zj + cr;
-            zj = 2.0 * zr * zj + cj;
+            
+            if (u_fractal_type == 1) { // Burning Ship
+                zj = -abs(2.0 * zr * zj) + cj;
+            } else {
+                zj = 2.0 * zr * zj + cj;
+            }
+            
             zr = temp;
             count++;
         }
 
-
         if (count == max_iterations) {
-            FragColor = vec4(0.0, 0.0, 0.0, 1.0); // Black (R, G, B, alfa)
+            FragColor = vec4(0.0, 0.0, 0.0, 1.0); 
         } else {
-            float r = float(count * 2) / 255.0;
-            float g = float(count * 5) / 255.0;
-            float b = float(count) / 255.0;
-            FragColor = vec4(r, g, b, 1.0);
+            float z_sq = zr * zr + zj * zj;
+            float log_z = log(z_sq) / 2.0;
+            float nu = log(log_z / log(2.0)) / log(2.0);
+            
+            float smooth_iter = float(count) + 1.0 - nu;
+
+            float color_index = smooth_iter * 0.05;
+            FragColor = vec4(getColor(color_index), 1.0);
         }
     }
 )";
-
 
 
 // Shader compilation
@@ -135,41 +261,45 @@ GLuint compileShaders(const char* fragmentShaderSource) {
     return shaderProgram;
 }
 
-
-// Unused, as all compute are performed on GPU
-// It can be safely removed
-int mandelbrot(double cr, double cj, int max_iterations) {
-    double zr = 0.0; // Re part
-    double zj = 0.0; // Im part
-    int count = 0;
-
-    // |z| < 2   --->   zr^2 + zj^2 < 4
-    while (zr * zr + zj * zj <= 4.0 && count < max_iterations) {
-        // (zr + zj*j)^2 = zr^2 - zj^2 + 2*zr*zj*j
-        double temp = zr * zr - zj * zj + cr;
-        zj = 2.0 * zr * zj + cj;
-        zr = temp;
-        count++;
-    }
-
-    return count;
-}
-
 int main()
 {
-
     // Config
     int width = 1280;
     int height = 720;
     float scale = 1;
-    bool useFP64 = false;
+    bool useFP64 = false; // Domyœlnie na false (szybki tryb FP32)
+    int fractalMode = 0;
+    const char* fractalModes[] = { "Mandelbrot set", "Burning Ship", "Julia set" };
+
+    // Sta³e dla Zbioru Julii
+    double julia_c_r = -0.7;
+    double julia_c_i = 0.27015;
+
+    int current_palette = 0;
+    const char* palettes[] = { "Wikipedia (Klasyczna)", "Ogien (Fire)", "Lod (Ice)", "Neon" };
+    bool showSettings = true;
+
+    bool isFullscreen = false;
+    int windowedX = 100;
+    int windowedY = 100;
+    int windowedWidth = width;
+    int windowedHeight = height;
 
     double minR = -2.0;
     double maxR = 1.0;
     double minI = -1.2;
     double maxI = 1.2;
 
-    int max_iterations = 100;
+    // For smooth zoom
+    double targetMinR = minR;
+    double targetMaxR = maxR;
+    double targetMinI = minI;
+    double targetMaxI = maxI;
+
+    float zoomSpeed = 0.1;
+
+    int max_iterations = 150;
+    bool auto_iterations = true; // Dynamiczne iteracje zapobiegaj¹ce lagom
 
     // GLFW Init
     if (!glfwInit()) {
@@ -193,6 +323,11 @@ int main()
     glfwSetWindowAspectRatio(window, 16, 9); // keep aspect ratio
     glfwSwapInterval(1); // V-Sync
 
+    // UI scaling
+    float xscale = 1.0f, yscale = 1.0f;
+    glfwGetWindowContentScale(window, &xscale, &yscale);
+    scale = xscale;
+
     // GLAD Init
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -206,16 +341,29 @@ int main()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-    // Interface scaling
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(scale);
-    io.FontGlobalScale = scale;
+
+    io.Fonts->Clear();
+    ImFont* font = nullptr;
+
+    font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f * scale);
+
+    if (font == nullptr) {
+        font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0f * scale);
+    }
+
+    if (font == nullptr) {
+        ImFontConfig config;
+        config.SizePixels = 13.0f * scale;
+        io.Fonts->AddFontDefault(&config);
+    }
+
+    io.FontGlobalScale = 1.0f;
 
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
-
-    int counter = 0;
 
     // Compiling the shader program
     GLuint shaderProgramFP32 = compileShaders(fragmentShaderSourceFP32);
@@ -242,70 +390,123 @@ int main()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    auto toggleFullscreen = [&]() {
+        isFullscreen = !isFullscreen;
+        if (isFullscreen) {
+            glfwGetWindowPos(window, &windowedX, &windowedY);
+            glfwGetWindowSize(window, &windowedWidth, &windowedHeight);
+            GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+            const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+            glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        }
+        else {
+            glfwSetWindowMonitor(window, nullptr, windowedX, windowedY, windowedWidth, windowedHeight, 0);
+        }
+        glfwSetWindowAspectRatio(window, 16, 9);
+        };
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-        // Event handling
         glfwPollEvents();
 
-        // Start new ImGui
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Obliczanie poziomu powiêkszenia (zoom) i szerokoœci
+        double currentWidth = maxR - minR;
+        double zoomLevel = 3.0 / currentWidth;
+
+        // Auto Iteracje - zapobiegaj¹ lagom i daj¹ ostroœæ
+        if (auto_iterations) {
+            // Skaluje iloœæ iteracji logarytmicznie w stosunku do zoomu.
+            int dynamic_iter = 100 + (int)(log10(std::max(1.0, zoomLevel)) * 120.0);
+            max_iterations = std::min(dynamic_iter, 3000); // Twardy limit na 3000 aby uchroniæ GPU przed zwiech¹
+        }
+
         {
+            if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
+                toggleFullscreen();
+            }
+
             if (ImGui::BeginMainMenuBar()) {
-
                 if (ImGui::BeginMenu("File")) {
-
+                    if (ImGui::MenuItem(useFP64 ? "Use FP32 (Szybki)" : "Use FP64 (Gleboki Zoom)")) {
+                        useFP64 = !useFP64;
+                    }
                     ImGui::Separator();
-
                     if (ImGui::MenuItem("Exit")) {
                         glfwSetWindowShouldClose(window, GLFW_TRUE);
                     }
+                    ImGui::EndMenu();
+                }
 
+                if (ImGui::BeginMenu("Window")) {
+                    if (ImGui::MenuItem("Settings")) {
+                        showSettings = !showSettings;
+                    }
+                    if (ImGui::MenuItem("Toggle Fullscreen", "F11")) {
+                        toggleFullscreen();
+                    }
                     ImGui::EndMenu();
                 }
                 ImGui::EndMainMenuBar();
             }
 
-            ImGui::Begin("Settings");
+            if (showSettings) {
+                ImGui::Begin("Settings");
 
-            ImGui::Text("Mandelbrot Explorer");
+                ImGui::Text("Mandelbrot Explorer");
 
-            if (ImGui::Button("Reset View")) {
-                minR = -2.0; maxR = 1.0; minI = -1.2; maxI = 1.2;
+                if (ImGui::Button("Reset View")) {
+                    targetMinR = -2.0;
+                    targetMaxR = 1.0;
+                    targetMinI = -1.2;
+                    targetMaxI = 1.2;
+                }
+
+                ImGui::Separator();
+                ImGui::Text("Zoom stats:");
+
+                if (zoomLevel > 10000.0) {
+                    ImGui::Text("Zoom: %.2e x", zoomLevel);
+                }
+                else {
+                    ImGui::Text("Zoom: %.1f x", zoomLevel);
+                }
+
+                ImGui::Text("Width (Delta R): %.2e", currentWidth);
+
+                ImGui::Separator();
+                ImGui::Combo("Color set", &current_palette, palettes, IM_ARRAYSIZE(palettes));
+                ImGui::Combo("Fractal Type", &fractalMode, fractalModes, IM_ARRAYSIZE(fractalModes));
+
+                if (fractalMode == 2) {
+                    ImGui::Text("Opcje Zbioru Julii:");
+                    ImGui::InputDouble("Re(c)", &julia_c_r, 0.001, 0.01, "%.6f");
+                    ImGui::InputDouble("Im(c)", &julia_c_i, 0.001, 0.01, "%.6f");
+                }
+
+                ImGui::Separator();
+                ImGui::Checkbox("Auto-Adjust Iterations (Mniej lagow)", &auto_iterations);
+
+                if (!auto_iterations) {
+                    ImGui::SliderInt("Max Iteration", &max_iterations, 10, 2000);
+                }
+                else {
+                    ImGui::Text("Obecne Iteracje: %d", max_iterations);
+                }
+
+                ImGui::SliderFloat("Zoom speed", &zoomSpeed, 0.01, 1);
+
+                ImGui::Separator();
+                ImGui::Checkbox("Use FP64? (Wymagane do glebokiego zoomu)", &useFP64);
+                ImGui::Text("Performance: %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                ImGui::Text("Resolution: %d x %d px", width, height);
+                ImGui::End();
             }
-
-            // Current width in complex numbers
-            double currentWidth = maxR - minR;
-            double zoomLevel = 3.0 / currentWidth;
-
-            ImGui::Separator();
-            ImGui::Text("Zoom stats:");
-
-            if (zoomLevel > 10000.0) {
-                ImGui::Text("Zoom: %.2e x", zoomLevel);
-            }
-            else {
-                ImGui::Text("Zoom: %.1f x", zoomLevel);
-            }
-
-            ImGui::Text("Szerokosc (Delta R): %.2e", currentWidth);
-
-            if (ImGui::Button("Click me")) {
-                counter++;
-            }
-            ImGui::SameLine();
-            ImGui::Text("Clicks = %d", counter);
-
-            ImGui::Checkbox("Use FP64?", &useFP64);
-            
-            ImGui::SliderInt("Max Iteration", &max_iterations, 10, 1000);
-
-            ImGui::Text("Performance: %.3f ms/klatke (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::Text("Resolution: %d x %d px", width, height);
-            ImGui::End();
         }
+
         static ImVec2 dragStart(0, 0);
         static bool isDragging = false;
 
@@ -318,55 +519,39 @@ int main()
 
             if (isDragging && ImGui::IsMouseDragging(0)) {
                 ImVec2 dragCurrent = ImGui::GetMousePos();
-
-                // Calculate current offset
                 float dx = dragCurrent.x - dragStart.x;
                 float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
-
-                // Force 16:9 aspect ratio based on width
                 float absDx = fabs(dx);
                 float absDy = absDx * (9.0f / 16.0f);
-
-                // Get vertical drag direction
                 float signY = (dragCurrent.y >= dragStart.y) ? 1.0f : -1.0f;
 
-                // Calculate 16:9 rectangle end point
                 ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
-
-                // Draw 16:9 gold frame
                 ImDrawList* drawList = ImGui::GetForegroundDrawList();
-                drawList->AddRect(dragStart, lockedEnd, IM_COL32(255, 215, 0, 255), 0.0f, 0, 2.0f); // Gold frame
+                drawList->AddRect(dragStart, lockedEnd, IM_COL32(255, 215, 0, 255), 0.0f, 0, 2.0f);
             }
 
             if (isDragging && ImGui::IsMouseReleased(0)) {
                 ImVec2 dragEnd = ImGui::GetMousePos();
                 isDragging = false;
-
                 float dx = dragEnd.x - dragStart.x;
 
-                // Min 10px threshold to prevent accidental clicks
                 if (fabs(dx) > 10.0f) {
                     float signX = (dx >= 0.0f) ? 1.0f : -1.0f;
                     float absDx = fabs(dx);
                     float absDy = absDx * (9.0f / 16.0f);
                     float signY = (dragEnd.y >= dragStart.y) ? 1.0f : -1.0f;
 
-                    // Reconstruct 16:9 end point
                     ImVec2 lockedEnd(dragStart.x + absDx * signX, dragStart.y + absDy * signY);
-
-                    // Map to OpenGL coordinates (Y-up)
                     double x1 = dragStart.x;
                     double y1 = height - dragStart.y;
                     double x2 = lockedEnd.x;
                     double y2 = height - lockedEnd.y;
 
-                    // Sort min/max
                     double screenMinX = std::min(x1, x2);
                     double screenMaxX = std::max(x1, x2);
                     double screenMinY = std::min(y1, y2);
                     double screenMaxY = std::max(y1, y2);
 
-                    // Convert pixels to complex plane
                     double currentRangeR = maxR - minR;
                     double currentRangeI = maxI - minI;
 
@@ -375,18 +560,17 @@ int main()
                     double newMinI = minI + (screenMinY / height) * currentRangeI;
                     double newMaxI = minI + (screenMaxY / height) * currentRangeI;
 
-                    // Update fractal world bounds
-                    minR = newMinR;
-                    maxR = newMaxR;
-                    minI = newMinI;
-                    maxI = newMaxI;
+                    targetMinR = newMinR;
+                    targetMaxR = newMaxR;
+                    targetMinI = newMinI;
+                    targetMaxI = newMaxI;
                 }
             }
         }
         else {
             isDragging = false;
         }
-        
+
         // Scroll zoom
         if (!ImGui::GetIO().WantCaptureMouse) {
             float wheel = ImGui::GetIO().MouseWheel;
@@ -394,7 +578,6 @@ int main()
             if (wheel != 0.0f) {
                 ImVec2 mousePos = ImGui::GetMousePos();
 
-                // Mapping the current mouse position to the complex plane
                 double mouseOpenGlX = mousePos.x;
                 double mouseOpenGlY = height - mousePos.y;
 
@@ -415,29 +598,30 @@ int main()
                 double newRangeR = currentRangeR * zoomFactor;
                 double newRangeI = currentRangeI * zoomFactor;
 
-                // Cursor is an anchor
                 double ratioX = mouseOpenGlX / width;
                 double ratioY = mouseOpenGlY / height;
 
-                minR = mouseR - ratioX * newRangeR;
-                maxR = mouseR + (1.0 - ratioX) * newRangeR;
-                minI = mouseI - ratioY * newRangeI;
-                maxI = mouseI + (1.0 - ratioY) * newRangeI;
+                targetMinR = mouseR - ratioX * newRangeR;
+                targetMaxR = mouseR + (1.0 - ratioX) * newRangeR;
+                targetMinI = mouseI - ratioY * newRangeI;
+                targetMaxI = mouseI + (1.0 - ratioY) * newRangeI;
             }
         }
-        
-        // Rendering ImGui
-        ImGui::Render();
 
+        ImGui::Render();
 
         glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        GLuint shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
-
-        // GPU program starts here
+        shaderProgram = useFP64 ? shaderProgramFP64 : shaderProgramFP32;
         glUseProgram(shaderProgram);
+
+        // Linear Interpolation for smooth zooming
+        minR += (targetMinR - minR) * zoomSpeed;
+        maxR += (targetMaxR - maxR) * zoomSpeed;
+        minI += (targetMinI - minI) * zoomSpeed;
+        maxI += (targetMaxI - maxI) * zoomSpeed;
 
         // Sending variables to Shader code
         glUniform2f(glGetUniformLocation(shaderProgram, "u_resolution"), (float)width, (float)height);
@@ -446,6 +630,11 @@ int main()
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxR"), maxR);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_minI"), minI);
         glUniform1d(glGetUniformLocation(shaderProgram, "u_maxI"), maxI);
+
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_fractal_type"), fractalMode);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_julia_c_r"), julia_c_r);
+        glUniform1d(glGetUniformLocation(shaderProgram, "u_julia_c_i"), julia_c_i);
+        glUniform1i(glGetUniformLocation(shaderProgram, "u_color_set"), current_palette);
 
         // GPU draws rectangle filled with shader
         glBindVertexArray(VAO);
@@ -460,7 +649,6 @@ int main()
 
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shaderProgram);
     glDeleteProgram(shaderProgramFP32);
     glDeleteProgram(shaderProgramFP64);
     ImGui_ImplOpenGL3_Shutdown();
@@ -469,6 +657,6 @@ int main()
 
     glfwDestroyWindow(window);
     glfwTerminate();
-    
 
+    return 0;
 }
