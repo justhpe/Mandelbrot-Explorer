@@ -312,6 +312,11 @@ int main()
     glfwSetWindowAspectRatio(window, 16, 9); // keep aspect ratio
     glfwSwapInterval(1); // V-Sync
 
+    // UI scaling
+    float xscale = 1.0f, yscale = 1.0f;
+    glfwGetWindowContentScale(window, &xscale, &yscale);
+    scale = xscale;
+
     // GLAD Init
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
         std::cerr << "Failed to initialize GLAD" << std::endl;
@@ -325,11 +330,26 @@ int main()
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
-    // Interface scaling
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(scale);
-    io.FontGlobalScale = scale;
 
+    io.Fonts->Clear();
+    ImFont* font = nullptr;
+
+    font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f * scale);
+
+    if (font == nullptr) {
+        font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0f * scale);
+    }
+
+    if (font == nullptr) {
+        ImFontConfig config;
+        config.SizePixels = 13.0f * scale;
+        io.Fonts->AddFontDefault(&config);
+    }
+
+    io.FontGlobalScale = 1.0f;
+    
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
