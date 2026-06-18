@@ -349,7 +349,7 @@ int main()
     }
 
     io.FontGlobalScale = 1.0f;
-    
+
     // Connecting ImGui to GLFW and OpenGL
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -399,7 +399,7 @@ int main()
         }
         // Restore aspect ratio constraint after a monitor change
         glfwSetWindowAspectRatio(window, 16, 9);
-     };
+        };
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -412,7 +412,7 @@ int main()
         ImGui::NewFrame();
 
         {
-			// Fullscreen shortcut
+            // Fullscreen shortcut
             if (ImGui::IsKeyPressed(ImGuiKey_F11)) {
                 toggleFullscreen();
             }
@@ -434,7 +434,7 @@ int main()
                     ImGui::EndMenu();
                 }
 
-                
+
                 if (ImGui::BeginMenu("Window")) {
 
                     if (ImGui::MenuItem("Settings")) {
@@ -449,15 +449,15 @@ int main()
                 ImGui::EndMainMenuBar();
             }
 
-            if ( showSettings ){
+            if (showSettings) {
                 ImGui::Begin("Settings");
 
                 ImGui::Text("Mandelbrot Explorer");
 
                 if (ImGui::Button("Reset View")) {
-                    targetMinR = -2.0; 
-                    targetMaxR = 1.0; 
-                    targetMinI = -1.2; 
+                    targetMinR = -2.0;
+                    targetMaxR = 1.0;
+                    targetMinI = -1.2;
                     targetMaxI = 1.2;
                 }
 
@@ -627,7 +627,7 @@ int main()
         // GPU program starts here
         glUseProgram(shaderProgram);
 
-		// Linear Interpolation for smooth zooming
+        // Linear Interpolation for smooth zooming
         minR += (targetMinR - minR) * zoomSpeed;
         maxR += (targetMaxR - maxR) * zoomSpeed;
         minI += (targetMinI - minI) * zoomSpeed;
