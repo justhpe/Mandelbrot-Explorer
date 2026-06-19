@@ -1,9 +1,10 @@
 # Mandelbrot-Explorer
 
-
 ## About
 
 A real-time, high-performance fractal explorer powered by modern OpenGL and C++. This application offloads all heavy mathematical computations directly to the GPU using custom fragment shaders, allowing for smooth navigation and exploration of complex mathematical spaces.
+
+![Mandelbrot Explorer](img/demo.png)
 
 ## Features
 
